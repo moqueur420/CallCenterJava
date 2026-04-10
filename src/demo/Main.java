@@ -8,6 +8,7 @@ import result.SimulationResults;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Random;
@@ -37,14 +38,44 @@ public class Main {
         SimulationResults results = adapter.runFastFullSimulation(config);
         Path reportPath = args.length > 0
                 ? Paths.get(args[0])
-                : Paths.get("CCJava", "CallCenterJava", "simulation_report.txt");
+                : resolveDefaultReportPath();
 
         reportPath = SimulationReportWriter.writeReport(config, results, reportPath);
 
         System.out.println("Отчет сохранен в файл: " + reportPath);
         System.out.println("Интервалов в отчете: " + config.totalIntervals);
-        System.out.println("Всего поступило заявок: " + results.totalArrived);
-        System.out.println("Успешно обслужено: " + results.totalServed);
-        System.out.println("Ушло из-за ожидания: " + results.totalAbandoned);
+        for (String line : SimulationReportWriter.buildSummaryLines(results)) {
+            System.out.println(line);
+        }
+    }
+
+    private static Path resolveDefaultReportPath() {
+        Path workingDirectory = Paths.get("").toAbsolutePath().normalize();
+
+        if (isProjectRoot(workingDirectory)) {
+            return workingDirectory.resolve("simulation_report.txt");
+        }
+
+        Path nestedProjectRoot = workingDirectory.resolve("CallCenterJava");
+        if (isProjectRoot(nestedProjectRoot)) {
+            return nestedProjectRoot.resolve("simulation_report.txt");
+        }
+
+        Path current = workingDirectory.getParent();
+        while (current != null) {
+            if (isProjectRoot(current)) {
+                return current.resolve("simulation_report.txt");
+            }
+            current = current.getParent();
+        }
+
+        return workingDirectory.resolve("simulation_report.txt");
+    }
+
+    private static boolean isProjectRoot(Path path) {
+        return path != null
+                && path.getFileName() != null
+                && "CallCenterJava".equals(path.getFileName().toString())
+                && Files.isDirectory(path.resolve("src"));
     }
 }

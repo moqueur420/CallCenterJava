@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -72,18 +73,24 @@ public final class SimulationReportWriter {
             }
             writeLine(writer, "");
 
-            writeLine(writer, "Итоговые параметры:");
-            writeLine(writer, "Всего поступило заявок: " + results.totalArrived);
-            writeLine(writer, "Успешно обслужено: " + results.totalServed);
-            writeLine(writer, "Ушло из-за ожидания: " + results.totalAbandoned);
-            writeLine(writer, "Незавершенных к окончанию модели: " + results.totalUnresolved);
-            writeLine(writer, "Среднее время в очереди: " + formatNumber(results.averageQueueTime));
-            writeLine(writer, "Среднее время обслуживания: " + formatNumber(results.averageServiceTime));
-            writeLine(writer, "Вероятность обслуживания: " + formatNumber(results.serviceProbability));
-            writeLine(writer, "Вероятность ухода: " + formatNumber(results.abandonmentProbability));
+            writeLines(writer, buildSummaryLines(results));
         }
 
         return absolutePath;
+    }
+
+    public static List<String> buildSummaryLines(SimulationResults results) {
+        List<String> summaryLines = new ArrayList<>();
+        summaryLines.add("Итоговые параметры:");
+        summaryLines.add("Всего поступило заявок: " + results.totalArrived);
+        summaryLines.add("Успешно обслужено: " + results.totalServed);
+        summaryLines.add("Ушло из-за ожидания: " + results.totalAbandoned);
+        summaryLines.add("Незавершенных к окончанию модели: " + results.totalUnresolved);
+        summaryLines.add("Среднее время в очереди: " + formatNumber(results.averageQueueTime));
+        summaryLines.add("Среднее время обслуживания: " + formatNumber(results.averageServiceTime));
+        summaryLines.add("Вероятность обслуживания: " + formatNumber(results.serviceProbability));
+        summaryLines.add("Вероятность ухода: " + formatNumber(results.abandonmentProbability));
+        return summaryLines;
     }
 
     private static void writeCompletedRequests(BufferedWriter writer, List<CallRequest> requests) throws IOException {
@@ -126,5 +133,11 @@ public final class SimulationReportWriter {
     private static void writeLine(BufferedWriter writer, String line) throws IOException {
         writer.write(line);
         writer.newLine();
+    }
+
+    private static void writeLines(BufferedWriter writer, List<String> lines) throws IOException {
+        for (String line : lines) {
+            writeLine(writer, line);
+        }
     }
 }
