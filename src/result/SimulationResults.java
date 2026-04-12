@@ -11,6 +11,8 @@ public class SimulationResults {
     public Map<Integer, Double> kClientByInterval;
     public Map<Integer, Double> kOperByInterval;
     public Map<Integer, Double> stabilityByInterval;
+    public Map<Integer, Long> operatorsCountByInterval;
+    public Map<Integer, Double> serviceCapacityByInterval;
     public Map<Integer, Double> targetFunctionByInterval;
     public int totalArrived;
     public int totalServed;

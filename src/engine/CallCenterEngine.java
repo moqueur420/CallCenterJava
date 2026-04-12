@@ -213,6 +213,8 @@ public class CallCenterEngine {
         res.kClientByInterval = new LinkedHashMap<>();
         res.kOperByInterval = new LinkedHashMap<>();
         res.stabilityByInterval = new LinkedHashMap<>();
+        res.operatorsCountByInterval = new LinkedHashMap<>();
+        res.serviceCapacityByInterval = new LinkedHashMap<>();
         res.targetFunctionByInterval = new LinkedHashMap<>();
 
         Map<Integer, List<CallRequest>> reqsByInterval = new HashMap<>();
@@ -232,11 +234,14 @@ public class CallCenterEngine {
             int finalI = i;
             double totalBusyTime = allOperators.stream().mapToDouble(op -> op.getBusyTimeByInterval().getOrDefault(finalI, 0.0)).sum();
             long opsInInterval = countOperatorsInInterval(i);
+            double serviceCapacity = opsInInterval * config.mu;
             double kOper = opsInInterval == 0 ? 0 : totalBusyTime / (opsInInterval * config.intervalLength);
             double stability = calculateStability(opsInInterval, config.lambdaByInterval.get(i));
 
             res.kOperByInterval.put(i, kOper);
             res.stabilityByInterval.put(i, stability);
+            res.operatorsCountByInterval.put(i, opsInInterval);
+            res.serviceCapacityByInterval.put(i, serviceCapacity);
             res.targetFunctionByInterval.put(i, C1 * kOper - C2 * kClient);
 
             if (config.lambdaByInterval.get(i) > 0.0) {
