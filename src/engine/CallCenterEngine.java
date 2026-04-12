@@ -212,6 +212,7 @@ public class CallCenterEngine {
 
         res.kClientByInterval = new LinkedHashMap<>();
         res.kOperByInterval = new LinkedHashMap<>();
+        res.stabilityByInterval = new LinkedHashMap<>();
         res.targetFunctionByInterval = new LinkedHashMap<>();
 
         Map<Integer, List<CallRequest>> reqsByInterval = new HashMap<>();
@@ -220,6 +221,8 @@ public class CallCenterEngine {
         }
 
         double C1 = 1.0, C2 = 1.0;
+        double minimumStability = Double.POSITIVE_INFINITY;
+        boolean systemStable = true;
         for (int i = 0; i < config.totalIntervals; i++) {
             List<CallRequest> intervalReqs = reqsByInterval.getOrDefault(i, Collections.emptyList());
             double avgQueue = intervalReqs.isEmpty() ? 0 : intervalReqs.stream().mapToDouble(CallRequest::getQueueTime).average().orElse(0);
@@ -228,15 +231,42 @@ public class CallCenterEngine {
 
             int finalI = i;
             double totalBusyTime = allOperators.stream().mapToDouble(op -> op.getBusyTimeByInterval().getOrDefault(finalI, 0.0)).sum();
-            long opsInInterval = allOperators.stream()
-                    .filter(op -> op.getShiftStartTime() <= finalI * config.intervalLength
-                            && op.getShiftEndTime() > finalI * config.intervalLength)
-                    .count();
+            long opsInInterval = countOperatorsInInterval(i);
             double kOper = opsInInterval == 0 ? 0 : totalBusyTime / (opsInInterval * config.intervalLength);
+            double stability = calculateStability(opsInInterval, config.lambdaByInterval.get(i));
 
             res.kOperByInterval.put(i, kOper);
+            res.stabilityByInterval.put(i, stability);
             res.targetFunctionByInterval.put(i, C1 * kOper - C2 * kClient);
+
+            if (config.lambdaByInterval.get(i) > 0.0) {
+                minimumStability = Math.min(minimumStability, stability);
+                if (stability < 1.0) {
+                    systemStable = false;
+                }
+            }
         }
+
+        res.minimumStability = minimumStability;
+        res.systemStable = systemStable;
         return res;
+    }
+
+    private long countOperatorsInInterval(int intervalIndex) {
+        double intervalStart = intervalIndex * config.intervalLength;
+        return allOperators.stream()
+                .filter(op -> op.getShiftStartTime() <= intervalStart
+                        && op.getShiftEndTime() > intervalStart)
+                .count();
+    }
+
+    private double calculateStability(long operatorsInInterval, double lambda) {
+        if (lambda <= 0.0) {
+            return Double.POSITIVE_INFINITY;
+        }
+        if (operatorsInInterval == 0) {
+            return 0.0;
+        }
+        return operatorsInInterval * config.mu / lambda;
     }
 }

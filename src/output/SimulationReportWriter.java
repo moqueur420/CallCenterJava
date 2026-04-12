@@ -66,6 +66,13 @@ public final class SimulationReportWriter {
             }
             writeLine(writer, "");
 
+            writeLine(writer, "Коэффициент устойчивости системы по интервалам:");
+            for (int interval = 0; interval < config.totalIntervals; interval++) {
+                writeLine(writer, "Интервал " + interval + ", коэффициент устойчивости " +
+                        formatNumber(results.stabilityByInterval.getOrDefault(interval, 0.0)));
+            }
+            writeLine(writer, "");
+
             writeLine(writer, "Функция:");
             for (int interval = 0; interval < config.totalIntervals; interval++) {
                 writeLine(writer, "Интервал " + interval + ", функция " +
@@ -90,6 +97,8 @@ public final class SimulationReportWriter {
         summaryLines.add("Среднее время обслуживания: " + formatNumber(results.averageServiceTime));
         summaryLines.add("Вероятность обслуживания: " + formatNumber(results.serviceProbability));
         summaryLines.add("Вероятность ухода: " + formatNumber(results.abandonmentProbability));
+        summaryLines.add("Минимальный коэффициент устойчивости: " + formatNumber(results.minimumStability));
+        summaryLines.add("Система устойчива: " + formatBoolean(results.systemStable));
         return summaryLines;
     }
 
@@ -127,7 +136,17 @@ public final class SimulationReportWriter {
     }
 
     private static String formatNumber(double value) {
+        if (Double.isNaN(value)) {
+            return "NaN";
+        }
+        if (Double.isInfinite(value)) {
+            return value > 0 ? "INF" : "-INF";
+        }
         return NUMBER_FORMAT.format(value);
+    }
+
+    private static String formatBoolean(boolean value) {
+        return value ? "да" : "нет";
     }
 
     private static void writeLine(BufferedWriter writer, String line) throws IOException {
