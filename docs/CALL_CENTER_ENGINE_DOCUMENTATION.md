@@ -547,13 +547,22 @@ abandonmentProbability = totalAbandoned / totalArrived
 
 ## 20.5. Поинтервальные карты
 
-Создаются три структуры:
+Создаются шесть структур:
 
 - `kClientByInterval`
 - `kOperByInterval`
+- `stabilityByInterval`
+- `operatorsCountByInterval`
+- `serviceCapacityByInterval`
 - `targetFunctionByInterval`
 
 Они инициализируются как `LinkedHashMap`, чтобы сохранять предсказуемый порядок интервалов.
+
+Назначение дополнительных карт:
+
+- `stabilityByInterval` хранит значение `K_уст` по интервалам;
+- `operatorsCountByInterval` хранит число операторов, покрывающих начало интервала;
+- `serviceCapacityByInterval` хранит суммарную интенсивность обслуживания `opsInInterval * mu`.
 
 ## 20.6. Группировка заявок по интервалам поступления
 
@@ -587,7 +596,41 @@ K_oper = totalBusyTime / (opsInInterval * config.intervalLength)
 
 Если операторов нет, значение равно `0`.
 
-## 20.9. Расчёт целевой функции
+## 20.9. Расчёт коэффициента устойчивости
+
+После подсчёта `opsInInterval` движок получает промежуточную величину:
+
+```text
+serviceCapacity = opsInInterval * config.mu
+```
+
+Далее вызывается `calculateStability(opsInInterval, lambda)`.
+
+Логика метода:
+
+```text
+если lambda <= 0, вернуть INF
+если operatorsInInterval == 0, вернуть 0
+иначе вернуть operatorsInInterval * mu / lambda
+```
+
+То есть итоговая формула для интервала:
+
+```text
+K_уст = (opsInInterval * mu) / lambda
+```
+
+Дополнительно в `generateResults()`:
+
+- `operatorsCountByInterval.put(i, opsInInterval)` сохраняет число операторов для отчёта;
+- `serviceCapacityByInterval.put(i, serviceCapacity)` сохраняет числитель формулы;
+- `stabilityByInterval.put(i, stability)` сохраняет сам коэффициент устойчивости;
+- `minimumStability` обновляется только для интервалов, где `lambda > 0`;
+- `systemStable` становится `false`, если для такого интервала `K_уст < 1`.
+
+Именно эти значения затем используются `SimulationReportWriter` для построения подробного текстового блока с расчётом устойчивости.
+
+## 20.10. Расчёт целевой функции
 
 В коде используются фиксированные коэффициенты:
 
