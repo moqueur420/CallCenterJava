@@ -2,3 +2,6 @@
 simulation_report.txt
 .vscode/extensions.json
 .vscode/extensions.json
+.vscode/
+bin/
+*.class
