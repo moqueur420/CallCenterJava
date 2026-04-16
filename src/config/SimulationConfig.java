@@ -10,7 +10,9 @@ public class SimulationConfig {
     public double shiftLength = 14400.0;
     
     public List<Double> lambdaByInterval;
+    public List<Integer> arrivalsByInterval;
     public List<Integer> operatorsSchedule;
+    public int totalOperators = 0;
     
     public long seed = System.currentTimeMillis();
     public boolean useRandomServiceTime = true;

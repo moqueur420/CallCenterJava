@@ -63,7 +63,15 @@ public class CallCenterEngine {
     }
 
     private void generateArrivalsForInterval(int intervalIndex) {
+        if (config.arrivalsByInterval != null && intervalIndex < config.arrivalsByInterval.size()) {
+            generateFixedArrivalsForInterval(intervalIndex, config.arrivalsByInterval.get(intervalIndex));
+            return;
+        }
+
         double lambda = config.lambdaByInterval.get(intervalIndex);
+        if (lambda <= 0.0) {
+            return;
+        }
         double intervalStart = intervalIndex * config.intervalLength;
         double intervalEnd = intervalStart + config.intervalLength;
         double time = intervalStart;
@@ -73,12 +81,35 @@ public class CallCenterEngine {
             time += -Math.log(1 - u) / lambda;
             if (time > intervalEnd) break;
 
-            lastRequestId++;
-            double patience = config.useRandomServiceTime ? (-Math.log(1 - random.nextDouble()) / config.nu) : (1.0 / config.nu);
-            CallRequest req = new CallRequest(lastRequestId, time, patience, intervalIndex);
-            allRequests.add(req);
-            eventQueue.add(new SimEvent(time, SimEvent.EventType.ARRIVAL, req, -1));
+            enqueueRequest(time, intervalIndex);
         }
+    }
+
+    private void generateFixedArrivalsForInterval(int intervalIndex, int arrivalsCount) {
+        if (arrivalsCount <= 0) {
+            return;
+        }
+
+        double intervalStart = intervalIndex * config.intervalLength;
+        List<Double> arrivalTimes = new ArrayList<>(arrivalsCount);
+        for (int i = 0; i < arrivalsCount; i++) {
+            arrivalTimes.add(intervalStart + random.nextDouble() * config.intervalLength);
+        }
+        Collections.sort(arrivalTimes);
+
+        for (double arrivalTime : arrivalTimes) {
+            enqueueRequest(arrivalTime, intervalIndex);
+        }
+    }
+
+    private void enqueueRequest(double arrivalTime, int intervalIndex) {
+        lastRequestId++;
+        double patience = config.useRandomServiceTime
+                ? (-Math.log(1 - random.nextDouble()) / config.nu)
+                : (1.0 / config.nu);
+        CallRequest req = new CallRequest(lastRequestId, arrivalTime, patience, intervalIndex);
+        allRequests.add(req);
+        eventQueue.add(new SimEvent(arrivalTime, SimEvent.EventType.ARRIVAL, req, -1));
     }
 
     private void processArrival(CallRequest req) {

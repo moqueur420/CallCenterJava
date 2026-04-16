@@ -1,81 +1,97 @@
 package demo;
 
 import config.SimulationConfig;
+import input.DatasetConfigLoader;
 import integration.AnyLogicAdapter;
 import output.SimulationReportWriter;
 import result.SimulationResults;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Random;
 
 public class Main {
+    private static final String PROJECT_NAME = "CallCenterJava";
+
     public static void main(String[] args) throws Exception {
-        System.out.println("Запуск симуляции колл-центра...");
-
-        SimulationConfig config = new SimulationConfig();
-        List<Double> lambdas = new ArrayList<>();
-        Random rand = new Random(config.seed);
-        int lambdaBase = 100;
-        lambdas.add(lambdaBase / 3600.0);
-        for (int i = 1; i < 36; i++) {
-            lambdaBase = rand.nextInt(33) + (lambdaBase - 16);
-            lambdas.add(lambdaBase / 3600.0);
-        }
-        config.lambdaByInterval = lambdas;
-
-        Integer[] scheduleArray = {
-            2, 0, 1, 0, 1, 3, 1, 0, 0, 1, 0, 1, 0, 1, 0, 2, 2, 1, 1, 0, 1, 2, 0, 1, 3, 
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-        };
-        config.operatorsSchedule = Arrays.asList(scheduleArray);
+        Path datasetPath = resolveDatasetPath(args);
+        Path reportPath = resolveReportPath(args);
+        SimulationConfig config = DatasetConfigLoader.load(datasetPath);
 
         AnyLogicAdapter adapter = new AnyLogicAdapter();
         SimulationResults results = adapter.runFastFullSimulation(config);
-        Path reportPath = args.length > 0
-                ? Paths.get(args[0])
-                : resolveDefaultReportPath();
-
         reportPath = SimulationReportWriter.writeReport(config, results, reportPath);
 
-        System.out.println("Отчет сохранен в файл: " + reportPath);
-        System.out.println("Интервалов в отчете: " + config.totalIntervals);
+        System.out.println("Dataset: " + datasetPath.toAbsolutePath().normalize());
+        System.out.println("Report: " + reportPath);
+        System.out.println("Total operators: " + config.totalOperators);
+        System.out.println("Intervals: " + config.totalIntervals);
         for (String line : SimulationReportWriter.buildSummaryLines(results)) {
             System.out.println(line);
         }
     }
 
+    private static Path resolveDatasetPath(String[] args) {
+        if (args.length > 0 && looksLikeJsonPath(args[0])) {
+            return Paths.get(args[0]);
+        }
+        return resolveDefaultDatasetPath();
+    }
+
+    private static Path resolveReportPath(String[] args) {
+        if (args.length == 0) {
+            return resolveDefaultReportPath();
+        }
+
+        if (looksLikeJsonPath(args[0])) {
+            if (args.length > 1) {
+                return Paths.get(args[1]);
+            }
+            return resolveDefaultReportPath();
+        }
+
+        return Paths.get(args[0]);
+    }
+
+    private static boolean looksLikeJsonPath(String value) {
+        return value != null && value.toLowerCase().endsWith(".json");
+    }
+
+    private static Path resolveDefaultDatasetPath() {
+        return resolveProjectRoot().resolve(Paths.get("src", "input", "dataset.json"));
+    }
+
     private static Path resolveDefaultReportPath() {
+        return resolveProjectRoot().resolve("simulation_report.txt");
+    }
+
+    private static Path resolveProjectRoot() {
         Path workingDirectory = Paths.get("").toAbsolutePath().normalize();
 
         if (isProjectRoot(workingDirectory)) {
-            return workingDirectory.resolve("simulation_report.txt");
+            return workingDirectory;
         }
 
-        Path nestedProjectRoot = workingDirectory.resolve("CallCenterJava");
+        Path nestedProjectRoot = workingDirectory.resolve(PROJECT_NAME);
         if (isProjectRoot(nestedProjectRoot)) {
-            return nestedProjectRoot.resolve("simulation_report.txt");
+            return nestedProjectRoot;
         }
 
         Path current = workingDirectory.getParent();
         while (current != null) {
             if (isProjectRoot(current)) {
-                return current.resolve("simulation_report.txt");
+                return current;
             }
             current = current.getParent();
         }
 
-        return workingDirectory.resolve("simulation_report.txt");
+        return workingDirectory;
     }
 
     private static boolean isProjectRoot(Path path) {
         return path != null
                 && path.getFileName() != null
-                && "CallCenterJava".equals(path.getFileName().toString())
+                && PROJECT_NAME.equals(path.getFileName().toString())
                 && Files.isDirectory(path.resolve("src"));
     }
 }

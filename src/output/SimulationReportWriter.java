@@ -1,11 +1,6 @@
 package output;
 
 import config.SimulationConfig;
-import model.CallOperator;
-import model.CallRequest;
-import model.RequestStatus;
-import result.SimulationResults;
-
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -16,6 +11,10 @@ import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import model.CallOperator;
+import model.CallRequest;
+import model.RequestStatus;
+import result.SimulationResults;
 
 public final class SimulationReportWriter {
     private static final DecimalFormat NUMBER_FORMAT =
@@ -37,6 +36,14 @@ public final class SimulationReportWriter {
 
             writeLine(writer, "Добавление операторов по интервалам:");
             writeValuesLine(writer, config.operatorsSchedule);
+            writeLine(writer, "");
+
+            writeLine(writer, "Количество операторов, работавших по интервалам:");
+            for (int interval = 0; interval < config.totalIntervals; interval++) {
+                writeLine(writer, "Интервал " + interval + ", работало операторов " +
+                    results.operatorsCountByInterval.getOrDefault(interval, 0L));
+}
+
             writeLine(writer, "");
 
             writeCompletedRequests(writer, results.allRequests);
