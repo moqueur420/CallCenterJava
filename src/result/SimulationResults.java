@@ -10,6 +10,9 @@ public class SimulationResults {
     public List<CallOperator> allOperators;
     public Map<Integer, Double> kClientByInterval;
     public Map<Integer, Double> kOperByInterval;
+    public Map<Integer, Double> stabilityByInterval;
+    public Map<Integer, Long> operatorsCountByInterval;
+    public Map<Integer, Double> serviceCapacityByInterval;
     public Map<Integer, Double> targetFunctionByInterval;
     public int totalArrived;
     public int totalServed;
@@ -19,4 +22,6 @@ public class SimulationResults {
     public double averageServiceTime;
     public double serviceProbability;
     public double abandonmentProbability;
+    public double minimumStability;
+    public boolean systemStable;
 }

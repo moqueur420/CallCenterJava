@@ -1,18 +1,44 @@
-## Getting Started
+# CallCenterJava
 
-Welcome to the VS Code Java world. Here is a guideline to help you get started to write Java code in Visual Studio Code.
+`CallCenterJava` моделирует работу колл-центра методом дискретно-событийной симуляции. Проект рассчитывает поток заявок, загрузку операторов, показатели обслуживания и формирует текстовый отчёт по результатам прогона.
 
-## Folder Structure
+## Структура проекта
 
-The workspace contains two folders by default, where:
+- `src` - исходный код модели, движка, интеграционного слоя и генерации отчёта.
+- `docs` - подробная документация по проекту и по `CallCenterEngine`.
+- `bin` - скомпилированные `.class`-файлы.
+- `simulation_report.txt` - основной текстовый отчёт, который обновляется после запуска демо-программы.
 
-- `src`: the folder to maintain sources
-- `lib`: the folder to maintain dependencies
+## Что есть в отчёте
 
-Meanwhile, the compiled output files will be generated in the `bin` folder by default.
+После выполнения симуляции программа записывает результат в `simulation_report.txt`. Отчёт включает:
 
-> If you want to customize the folder structure, open `.vscode/settings.json` and update the related settings there.
+- входной поток `lambdaByInterval`;
+- расписание операторов `operatorsSchedule`;
+- список обслуженных и потерянных заявок;
+- показатели `K_client` и `K_oper` по интервалам;
+- коэффициент устойчивости `K_уст` по интервалам;
+- отдельный блок с подробным расчётом устойчивости системы;
+- итоговую сводку по прогону.
 
-## Dependency Management
+## Новый функционал по устойчивости
 
-The `JAVA PROJECTS` view allows you to manage your dependencies. More details can be found [here](https://github.com/microsoft/vscode-java-dependency#manage-dependencies).
+В отчёт добавлен отдельный аналитический блок, который поясняет устойчивость системы не только итоговым числом, но и полным расчётом. Для каждого интервала выводятся:
+
+- `lambda`;
+- число активных операторов `N_оп`;
+- суммарная интенсивность обслуживания `N_оп * mu`;
+- подстановка в формулу `K_уст = (N_оп * mu) / lambda`;
+- запас устойчивости `K_уст - 1`;
+- текстовый вывод о том, устойчива система в интервале или нет.
+
+В начале блока дополнительно показываются:
+
+- критерий устойчивости `K_уст >= 1`;
+- минимальный коэффициент устойчивости по модели;
+- общий вывод по всей системе.
+
+## Где читать подробнее
+
+- `docs/PROJECT_DOCUMENTATION.md` - общее описание архитектуры, метрик и формата отчёта.
+- `docs/CALL_CENTER_ENGINE_DOCUMENTATION.md` - подробное описание логики `CallCenterEngine`, включая расчёт `K_уст`.
