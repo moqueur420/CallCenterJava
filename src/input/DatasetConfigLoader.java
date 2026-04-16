@@ -52,10 +52,7 @@ public final class DatasetConfigLoader {
         config.totalOperators = totalOperators;
         config.totalIntervals = scheduleEntries.size();
         config.intervalLength = intervalLengthSeconds;
-        config.shiftLength = Double.POSITIVE_INFINITY;
         config.arrivalsByInterval = buildArrivalsByInterval(scheduleEntries);
-        config.lambdaByInterval = buildLambdaByInterval(config.arrivalsByInterval, intervalLengthSeconds);
-        config.operatorsSchedule = buildOperatorsSchedule(totalOperators, config.totalIntervals);
         return config;
     }
 
@@ -102,27 +99,6 @@ public final class DatasetConfigLoader {
             arrivalsByInterval.add(scheduleEntry.callCount());
         }
         return arrivalsByInterval;
-    }
-
-    private static List<Double> buildLambdaByInterval(List<Integer> arrivalsByInterval, double intervalLengthSeconds) {
-        List<Double> lambdas = new ArrayList<>(arrivalsByInterval.size());
-        for (Integer arrivalCount : arrivalsByInterval) {
-            lambdas.add(arrivalCount / intervalLengthSeconds);
-        }
-        return lambdas;
-    }
-
-    private static List<Integer> buildOperatorsSchedule(int totalOperators, int totalIntervals) {
-        if (totalOperators < 0) {
-            throw new IllegalArgumentException("totalOperators must not be negative");
-        }
-
-        List<Integer> operatorsSchedule = new ArrayList<>(totalIntervals);
-        operatorsSchedule.add(totalOperators);
-        for (int i = 1; i < totalIntervals; i++) {
-            operatorsSchedule.add(0);
-        }
-        return operatorsSchedule;
     }
 
     private static List<Object> readRequiredList(Map<String, Object> source, String key) {

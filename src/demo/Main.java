@@ -25,6 +25,7 @@ public class Main {
         System.out.println("Dataset: " + datasetPath.toAbsolutePath().normalize());
         System.out.println("Report: " + reportPath);
         System.out.println("Total operators: " + config.totalOperators);
+        System.out.println("Scheduled operators: " + config.operatorsSchedule.stream().mapToInt(Integer::intValue).sum());
         System.out.println("Intervals: " + config.totalIntervals);
         for (String line : SimulationReportWriter.buildSummaryLines(results)) {
             System.out.println(line);

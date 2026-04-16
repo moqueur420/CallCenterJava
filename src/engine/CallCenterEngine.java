@@ -30,10 +30,342 @@ public class CallCenterEngine {
     }
 
     public void initialize() {
+        prepareSimulationConfig();
         currentTime = 0.0;
         currentIntervalIndex = 0;
         addOperatorsForInterval(0);
         generateArrivalsForInterval(0);
+    }
+
+    private void prepareSimulationConfig() {
+        validateCoreConfig();
+        ensureArrivalsByInterval();
+        ensureLambdaByInterval();
+        ensureOperatorsSchedule();
+    }
+
+    private void validateCoreConfig() {
+        if (config.totalOperators < 0) {
+            throw new IllegalArgumentException("totalOperators must not be negative");
+        }
+        if (config.totalIntervals < 0) {
+            throw new IllegalArgumentException("totalIntervals must not be negative");
+        }
+        if (config.intervalLength <= 0.0) {
+            throw new IllegalArgumentException("intervalLength must be positive");
+        }
+        if (config.shiftLength <= 0.0) {
+            throw new IllegalArgumentException("shiftLength must be positive");
+        }
+        if (config.mu <= 0.0) {
+            throw new IllegalArgumentException("mu must be positive");
+        }
+        if (config.nu <= 0.0) {
+            throw new IllegalArgumentException("nu must be positive");
+        }
+    }
+
+    private void ensureArrivalsByInterval() {
+        if (config.arrivalsByInterval == null) {
+            return;
+        }
+
+        if (config.arrivalsByInterval.size() != config.totalIntervals) {
+            throw new IllegalArgumentException("arrivalsByInterval size must match totalIntervals");
+        }
+
+        for (Integer arrivals : config.arrivalsByInterval) {
+            if (arrivals == null || arrivals < 0) {
+                throw new IllegalArgumentException("arrivalsByInterval must contain only non-negative values");
+            }
+        }
+    }
+
+    private void ensureLambdaByInterval() {
+        if (config.lambdaByInterval == null) {
+            if (config.arrivalsByInterval == null) {
+                throw new IllegalArgumentException("lambdaByInterval or arrivalsByInterval must be provided");
+            }
+            config.lambdaByInterval = buildLambdaByInterval(config.arrivalsByInterval, config.intervalLength);
+            return;
+        }
+
+        if (config.lambdaByInterval.size() != config.totalIntervals) {
+            throw new IllegalArgumentException("lambdaByInterval size must match totalIntervals");
+        }
+
+        for (Double lambda : config.lambdaByInterval) {
+            if (lambda == null || lambda < 0.0) {
+                throw new IllegalArgumentException("lambdaByInterval must contain only non-negative values");
+            }
+        }
+    }
+
+    private void ensureOperatorsSchedule() {
+        if (config.operatorsSchedule == null) {
+            config.operatorsSchedule = buildOperatorsSchedule();
+            return;
+        }
+
+        if (config.operatorsSchedule.size() != config.totalIntervals) {
+            throw new IllegalArgumentException("operatorsSchedule size must match totalIntervals");
+        }
+
+        int scheduledOperators = 0;
+        for (Integer operatorsToAdd : config.operatorsSchedule) {
+            if (operatorsToAdd == null || operatorsToAdd < 0) {
+                throw new IllegalArgumentException("operatorsSchedule must contain only non-negative values");
+            }
+            scheduledOperators += operatorsToAdd;
+        }
+
+        if (scheduledOperators > config.totalOperators) {
+            throw new IllegalArgumentException("operatorsSchedule exceeds totalOperators");
+        }
+    }
+
+    private List<Double> buildLambdaByInterval(List<Integer> arrivalsByInterval, double intervalLengthSeconds) {
+        List<Double> lambdas = new ArrayList<>(arrivalsByInterval.size());
+        for (Integer arrivalCount : arrivalsByInterval) {
+            lambdas.add(arrivalCount / intervalLengthSeconds);
+        }
+        return lambdas;
+    }
+
+    private List<Integer> buildOperatorsSchedule() {
+        List<Integer> emptySchedule = new ArrayList<>(config.totalIntervals);
+        for (int i = 0; i < config.totalIntervals; i++) {
+            emptySchedule.add(0);
+        }
+        if (config.totalOperators == 0 || config.totalIntervals == 0) {
+            return emptySchedule;
+        }
+
+        int shiftCoverageIntervals = resolveShiftCoverageIntervals(config.shiftLength, config.intervalLength);
+        List<Double> requiredOperatorsByInterval = buildRequiredOperatorsByInterval(config.lambdaByInterval, config.mu);
+
+        List<Integer> minimalCoverageSchedule =
+                buildMinimalCoverageSchedule(requiredOperatorsByInterval, config.totalIntervals, shiftCoverageIntervals);
+
+        if (sumOperators(minimalCoverageSchedule) <= config.totalOperators) {
+            return minimalCoverageSchedule;
+        }
+
+        return buildBestEffortSchedule(
+                requiredOperatorsByInterval,
+                config.totalIntervals,
+                shiftCoverageIntervals,
+                config.totalOperators);
+    }
+
+    private int resolveShiftCoverageIntervals(double shiftLengthSeconds, double intervalLengthSeconds) {
+        return Math.max(1, (int) Math.ceil(shiftLengthSeconds / intervalLengthSeconds));
+    }
+
+    private List<Double> buildRequiredOperatorsByInterval(List<Double> lambdaByInterval, double mu) {
+        List<Double> requiredOperators = new ArrayList<>(lambdaByInterval.size());
+        for (double lambda : lambdaByInterval) {
+            requiredOperators.add(lambda <= 0.0 ? 0.0 : lambda / mu);
+        }
+        return requiredOperators;
+    }
+
+    private List<Integer> buildMinimalCoverageSchedule(
+            List<Double> requiredOperatorsByInterval,
+            int totalIntervals,
+            int shiftCoverageIntervals) {
+        List<Integer> schedule = new ArrayList<>(totalIntervals);
+        for (int i = 0; i < totalIntervals; i++) {
+            schedule.add(0);
+        }
+
+        int[] shiftEnds = new int[totalIntervals + shiftCoverageIntervals + 1];
+        int activeOperators = 0;
+
+        for (int interval = 0; interval < totalIntervals; interval++) {
+            activeOperators -= shiftEnds[interval];
+
+            int requiredOperators = ceilToInt(requiredOperatorsByInterval.get(interval));
+            int operatorsToAdd = requiredOperators - activeOperators;
+            if (operatorsToAdd <= 0) {
+                continue;
+            }
+
+            schedule.set(interval, operatorsToAdd);
+            activeOperators += operatorsToAdd;
+            shiftEnds[interval + shiftCoverageIntervals] += operatorsToAdd;
+        }
+
+        return schedule;
+    }
+
+    private List<Integer> buildBestEffortSchedule(
+            List<Double> requiredOperatorsByInterval,
+            int totalIntervals,
+            int shiftCoverageIntervals,
+            int totalOperators) {
+        List<Integer> schedule = new ArrayList<>(totalIntervals);
+        for (int i = 0; i < totalIntervals; i++) {
+            schedule.add(0);
+        }
+
+        double[] activeOperatorsByInterval = new double[totalIntervals];
+        for (int operator = 0; operator < totalOperators; operator++) {
+            int bestStartInterval = -1;
+            double bestGain = 0.0;
+            double bestPressure = 0.0;
+
+            for (int startInterval = 0; startInterval < totalIntervals; startInterval++) {
+                double marginalGain = 0.0;
+                double remainingPressure = 0.0;
+                int endInterval = Math.min(totalIntervals, startInterval + shiftCoverageIntervals);
+
+                for (int interval = startInterval; interval < endInterval; interval++) {
+                    double remainingDemand =
+                            requiredOperatorsByInterval.get(interval) - activeOperatorsByInterval[interval];
+                    if (remainingDemand <= 0.0) {
+                        continue;
+                    }
+
+                    marginalGain += Math.min(1.0, remainingDemand);
+                    remainingPressure += remainingDemand;
+                }
+
+                if (marginalGain > bestGain
+                        || (almostEqual(marginalGain, bestGain) && remainingPressure > bestPressure)
+                        || (almostEqual(marginalGain, bestGain)
+                                && almostEqual(remainingPressure, bestPressure)
+                                && startInterval > bestStartInterval)) {
+                    bestStartInterval = startInterval;
+                    bestGain = marginalGain;
+                    bestPressure = remainingPressure;
+                }
+            }
+
+            if (bestStartInterval < 0 || bestGain <= 0.0) {
+                break;
+            }
+
+            schedule.set(bestStartInterval, schedule.get(bestStartInterval) + 1);
+            applyShift(activeOperatorsByInterval, bestStartInterval, shiftCoverageIntervals, totalIntervals, 1);
+        }
+
+        improveScheduleLocally(schedule, requiredOperatorsByInterval, totalIntervals, shiftCoverageIntervals);
+        return schedule;
+    }
+
+    private void improveScheduleLocally(
+            List<Integer> schedule,
+            List<Double> requiredOperatorsByInterval,
+            int totalIntervals,
+            int shiftCoverageIntervals) {
+        double[] activeOperatorsByInterval =
+                buildActiveOperatorsByInterval(schedule, totalIntervals, shiftCoverageIntervals);
+        double currentScore = calculateCoverageScore(activeOperatorsByInterval, requiredOperatorsByInterval);
+
+        while (true) {
+            int bestFromInterval = -1;
+            int bestToInterval = -1;
+            double bestScore = currentScore;
+
+            for (int fromInterval = 0; fromInterval < totalIntervals; fromInterval++) {
+                if (schedule.get(fromInterval) <= 0) {
+                    continue;
+                }
+
+                applyShift(activeOperatorsByInterval, fromInterval, shiftCoverageIntervals, totalIntervals, -1);
+
+                for (int toInterval = 0; toInterval < totalIntervals; toInterval++) {
+                    if (toInterval == fromInterval) {
+                        continue;
+                    }
+
+                    applyShift(activeOperatorsByInterval, toInterval, shiftCoverageIntervals, totalIntervals, 1);
+                    double candidateScore =
+                            calculateCoverageScore(activeOperatorsByInterval, requiredOperatorsByInterval);
+                    if (candidateScore > bestScore && !almostEqual(candidateScore, bestScore)) {
+                        bestScore = candidateScore;
+                        bestFromInterval = fromInterval;
+                        bestToInterval = toInterval;
+                    }
+                    applyShift(activeOperatorsByInterval, toInterval, shiftCoverageIntervals, totalIntervals, -1);
+                }
+
+                applyShift(activeOperatorsByInterval, fromInterval, shiftCoverageIntervals, totalIntervals, 1);
+            }
+
+            if (bestFromInterval < 0 || bestToInterval < 0) {
+                return;
+            }
+
+            schedule.set(bestFromInterval, schedule.get(bestFromInterval) - 1);
+            schedule.set(bestToInterval, schedule.get(bestToInterval) + 1);
+
+            activeOperatorsByInterval =
+                    buildActiveOperatorsByInterval(schedule, totalIntervals, shiftCoverageIntervals);
+            currentScore = bestScore;
+        }
+    }
+
+    private double[] buildActiveOperatorsByInterval(
+            List<Integer> schedule,
+            int totalIntervals,
+            int shiftCoverageIntervals) {
+        double[] activeOperatorsByInterval = new double[totalIntervals];
+        for (int startInterval = 0; startInterval < schedule.size(); startInterval++) {
+            int operatorCount = schedule.get(startInterval);
+            if (operatorCount <= 0) {
+                continue;
+            }
+
+            applyShift(activeOperatorsByInterval, startInterval, shiftCoverageIntervals, totalIntervals, operatorCount);
+        }
+        return activeOperatorsByInterval;
+    }
+
+    private void applyShift(
+            double[] activeOperatorsByInterval,
+            int startInterval,
+            int shiftCoverageIntervals,
+            int totalIntervals,
+            int operatorDelta) {
+        int endInterval = Math.min(totalIntervals, startInterval + shiftCoverageIntervals);
+        for (int interval = startInterval; interval < endInterval; interval++) {
+            activeOperatorsByInterval[interval] += operatorDelta;
+        }
+    }
+
+    private double calculateCoverageScore(
+            double[] activeOperatorsByInterval,
+            List<Double> requiredOperatorsByInterval) {
+        double score = 0.0;
+        for (int interval = 0; interval < requiredOperatorsByInterval.size(); interval++) {
+            score += Math.min(activeOperatorsByInterval[interval], requiredOperatorsByInterval.get(interval));
+        }
+        return score;
+    }
+
+    private int sumOperators(List<Integer> schedule) {
+        int total = 0;
+        for (Integer value : schedule) {
+            total += value;
+        }
+        return total;
+    }
+
+    private int ceilToInt(double value) {
+        if (value <= 0.0) {
+            return 0;
+        }
+        double rounded = Math.rint(value);
+        if (Math.abs(rounded - value) < 1e-9) {
+            return (int) rounded;
+        }
+        return (int) Math.ceil(value);
+    }
+
+    private boolean almostEqual(double left, double right) {
+        return Math.abs(left - right) < 1e-9;
     }
 
     public boolean runNextInterval() {
@@ -114,10 +446,7 @@ public class CallCenterEngine {
 
     private void processArrival(CallRequest req) {
         lazyQueueCleanup();
-        CallOperator bestOp = findOptimalOperator();
-        if (bestOp != null) {
-            assignRequestToOperator(req, bestOp);
-        } else {
+        if (!tryAssignRequest(req)) {
             requestQueue.add(req);
         }
     }
@@ -130,27 +459,11 @@ public class CallCenterEngine {
         finishedReq.completeService(currentTime);
         op.freeUp();
 
-        if (currentTime >= op.getShiftEndTime()) {
-            activeOperators.remove(op);
-            return;
-        }
-
-        lazyQueueCleanup();
-        if (!requestQueue.isEmpty()) {
-            assignRequestToOperator(requestQueue.poll(), op);
-        }
+        removeExpiredIdleOperators();
+        assignQueuedRequests();
     }
 
-    private void assignRequestToOperator(CallRequest req, CallOperator op) {
-        double serviceTime = config.useRandomServiceTime ? (-Math.log(1 - random.nextDouble()) / config.mu) : (1.0 / config.mu);
-        
-        if (!op.canTakeRequest(currentTime, serviceTime)) {
-            activeOperators.remove(op);
-            requestQueue.addFirst(req); 
-            processDeparture(op.getId());
-            return;
-        }
-
+    private void assignRequestToOperator(CallRequest req, CallOperator op, double serviceTime) {
         req.startService(currentTime, op.getId());
         op.assignRequest(req.getId(), currentTime, serviceTime);
         distributeOperatorBusyTime(op, currentTime, currentTime + serviceTime);
@@ -168,10 +481,46 @@ public class CallCenterEngine {
         }
     }
 
-    private CallOperator findOptimalOperator() {
+    private boolean tryAssignRequest(CallRequest req) {
+        double serviceTime = sampleServiceTime();
+        CallOperator bestOp = findOptimalOperator(serviceTime);
+        if (bestOp == null) {
+            return false;
+        }
+
+        assignRequestToOperator(req, bestOp, serviceTime);
+        return true;
+    }
+
+    private void assignQueuedRequests() {
+        while (true) {
+            lazyQueueCleanup();
+            if (requestQueue.isEmpty()) {
+                return;
+            }
+
+            CallRequest nextRequest = requestQueue.peek();
+            if (!tryAssignRequest(nextRequest)) {
+                return;
+            }
+
+            requestQueue.poll();
+        }
+    }
+
+    private double sampleServiceTime() {
+        return config.useRandomServiceTime
+                ? (-Math.log(1 - random.nextDouble()) / config.mu)
+                : (1.0 / config.mu);
+    }
+
+    private CallOperator findOptimalOperator(double serviceTime) {
+        removeExpiredIdleOperators();
         return activeOperators.stream()
-                .filter(o -> !o.isBusy())
-                .min(Comparator.comparingDouble(CallOperator::getReleaseTime))
+                .filter(o -> o.canTakeRequest(currentTime, serviceTime))
+                .min(Comparator.comparingDouble(CallOperator::getReleaseTime)
+                        .thenComparingDouble(CallOperator::getShiftEndTime)
+                        .thenComparingInt(CallOperator::getId))
                 .orElse(null);
     }
 
@@ -183,6 +532,8 @@ public class CallCenterEngine {
             activeOperators.add(newOp);
             allOperators.add(newOp);
         }
+
+        assignQueuedRequests();
     }
 
     private void distributeOperatorBusyTime(CallOperator op, double start, double end) {
@@ -202,6 +553,10 @@ public class CallCenterEngine {
             if (event.type == SimEvent.EventType.DEPARTURE) processDeparture(event.operatorId);
         }
         lazyQueueCleanup();
+    }
+
+    private void removeExpiredIdleOperators() {
+        activeOperators.removeIf(op -> !op.isBusy() && currentTime >= op.getShiftEndTime());
     }
 
     public SimulationSnapshot getSnapshot() {
