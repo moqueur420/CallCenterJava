@@ -5,3 +5,4 @@ simulation_report.txt
 .vscode/
 bin/
 *.class
+out/
