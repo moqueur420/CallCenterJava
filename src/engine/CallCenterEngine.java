@@ -180,19 +180,19 @@ public class CallCenterEngine {
         }
 
         int[] shiftEnds = new int[totalIntervals + shiftCoverageIntervals + 1];
-        int activeOperators = 0;
+        int activeOperatorsCount = 0;
 
         for (int interval = 0; interval < totalIntervals; interval++) {
-            activeOperators -= shiftEnds[interval];
+            activeOperatorsCount -= shiftEnds[interval];
 
             int requiredOperators = ceilToInt(requiredOperatorsByInterval.get(interval));
-            int operatorsToAdd = requiredOperators - activeOperators;
+            int operatorsToAdd = requiredOperators - activeOperatorsCount;
             if (operatorsToAdd <= 0) {
                 continue;
             }
 
             schedule.set(interval, operatorsToAdd);
-            activeOperators += operatorsToAdd;
+            activeOperatorsCount += operatorsToAdd;
             shiftEnds[interval + shiftCoverageIntervals] += operatorsToAdd;
         }
 
